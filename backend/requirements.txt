@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+compressai
+torch
+torchvision
+opencv-python
+python-multipart
