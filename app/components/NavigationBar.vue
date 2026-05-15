@@ -2,8 +2,9 @@
   <nav class="flex justify-between p-2 bg-neutral-300">
     <NuxtLink to="/">Home</NuxtLink>
 
-    <ul>
+    <ul class="flex gap-4">
       <li><NuxtLink to="/about">About</NuxtLink></li>
+      <li><NuxtLink to="/upload">Upload</NuxtLink></li>
     </ul>
   </nav>
 </template>
