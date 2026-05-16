@@ -1,20 +1,14 @@
-export function useImage() {
-  const preview = useState<string | null>("preview", () => null);
-  const result = useState<string | null>("result", () => null);
-  const currentFile = useState<File | null>("currentFile", () => null);
+// useImage.ts
+export function useImage(namespace: string = "default") {
+  const preview = useState<string | null>(`${namespace}_preview`, () => null);
+  const result = useState<string | null>(`${namespace}_result`, () => null);
+  const currentFile = useState<File | null>(`${namespace}_file`, () => null);
 
   function loadFromStorage() {
-    preview.value = localStorage.getItem("preview");
-    result.value = localStorage.getItem("result");
+    console.log("loadFromStorage Running");
+    preview.value = localStorage.getItem(`${namespace}_preview`);
+    result.value = localStorage.getItem(`${namespace}_result`);
   }
 
-  function clear() {
-    preview.value = null;
-    result.value = null;
-    currentFile.value = null;
-    localStorage.removeItem("preview");
-    localStorage.removeItem("result");
-  }
-
-  return { preview, result, currentFile, loadFromStorage, clear };
+  return { preview, result, currentFile, loadFromStorage };
 }

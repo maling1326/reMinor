@@ -1,51 +1,46 @@
+let namespace = "compress";
 export function useCompressor() {
-  const { preview, result, currentFile } = useImage();
+  const {
+    handleFile: baseHandleFile,
+    loadFromSession: baseLoadFromSession,
+    refresh,
+    clear,
+    sendToBackend,
+  } = useUtils(namespace);
+  const { preview, result, currentFile, loadFromStorage } = useImage(namespace);
 
-  async function sendToBackend(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
+  // tambah logic khusus compression di sini
+  async function compress(quality: number = 80) {
+    console.log("Compress berjalan");
+    if (!currentFile.value) return;
 
-    const response = await fetch("/api/compress", {
-      method: "POST",
-      body: formData,
-    });
+    // logic sebelum kirim (kalau ada)
 
-    const blob = await response.blob();
+    await sendToBackend(currentFile.value, `/api/${namespace}`);
 
-    // Simpan result di localStorage
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      result.value = base64;
-      localStorage.setItem("result", base64);
-    };
-    reader.readAsDataURL(blob);
+    // logic sesudah kirim (kalau ada)
   }
 
   async function handleFile(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    currentFile.value = file; // ← simpan filenya
-
-    // Simpan preview di localStorage
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      preview.value = base64;
-      localStorage.setItem("preview", base64);
-    };
-    reader.readAsDataURL(file);
-
-    await sendToBackend(file); // ← pisah jadi function sendiri
+    await baseHandleFile(event);
+    await compress();
   }
 
-  async function refresh() {
-    console.log("refresh clicked, currentFile:", currentFile.value);
-    if (!currentFile.value) return;
-    await sendToBackend(currentFile.value);
+  async function loadFromSession() {
+    await baseLoadFromSession();
+    await compress();
   }
 
-  return { handleFile, refresh };
+  return {
+    baseHandleFile,
+    handleFile,
+    compress,
+    refresh,
+    clear,
+    loadFromSession,
+    loadFromStorage,
+    currentFile,
+    preview,
+    result,
+  };
 }

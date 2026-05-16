@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@theme {
+  --color-heading: #1a1a1a;
+  --color-neutral-secondary-medium: #e5e7eb;
+  --color-default-medium: #d1d5db;
+  --color-brand: #3b82f6;
+  --color-body: #6b7280;
+  --radius-base: 0.5rem;
+}
+
 body {
-  @apply bg-blue-200;
 }

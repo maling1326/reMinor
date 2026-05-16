@@ -24,13 +24,27 @@ def compress_image(img, quality=50):
     return img
 
 @app.post("/compress")
-async def compress_POST(file: UploadFile = File(...)):
+async def compress(file: UploadFile = File(...)):
     
     img_bytes = await file.read()
 
     img            = decode_image(img_bytes)
-    # img_compressed = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    img_compressed = compress_image(img)
+    img_compressed = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    # img_compressed = compress_image(img)
+    
+    from fastapi.responses import Response
+    return Response(
+        content    = encode_image(img_compressed),
+        media_type = file.content_type
+    )
+    
+@app.post("/convert")
+async def convert_to_grayscale(file: UploadFile = File(...)):
+    
+    img_bytes = await file.read()
+
+    img            = decode_image(img_bytes)
+    img_compressed = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     
     from fastapi.responses import Response
     return Response(

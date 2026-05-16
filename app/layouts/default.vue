@@ -1,4 +1,6 @@
 <template>
   <NavigationBar />
-  <slot />
+  <DragDrop>
+    <slot />
+  </DragDrop>
 </template>
