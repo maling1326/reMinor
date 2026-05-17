@@ -11,4 +11,11 @@ export default defineNuxtConfig({
   },
 
   modules: ["@nuxt/fonts"],
+
+  app: {
+    head: {
+      title: "reMinor",
+      titleTemplate: "reMinor - %s",
+    },
+  },
 });
