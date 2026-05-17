@@ -1,9 +1,13 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 @theme {
   --color-brand: #f8d57e;
   --color-base: #ffffff;
   --color-body: #2b2b2b;
+
+  --color-primary: #2b2b2b;
+  --color-primary-light: #333333;
 
   --color-secondary: #f8d57e;
   --color-secondary-light: #f7e8c1;
@@ -15,6 +19,8 @@
 
   --radius-base: 15px;
   --font-display: "Poppins";
+
+  --font-inter: "Inter", sans-serif;
 }
 
 :root {

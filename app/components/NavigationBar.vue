@@ -1,26 +1,5 @@
 <script lang="ts" setup>
-const fileInput = ref<HTMLInputElement | null>(null);
-
-function openFilePicker() {
-  fileInput.value?.click();
-}
-
-function onFileChange(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-
-  // trigger event yang sama seperti di index
-  // supaya DragDrop component bisa handle
-  const dataTransfer = new DataTransfer();
-  dataTransfer.items.add(file);
-
-  window.dispatchEvent(
-    new CustomEvent("filepicker:newfile", {
-      detail: { file },
-    }),
-  );
-}
+const { fileInput, openFilePicker, onFileChange } = useFilePicker();
 </script>
 
 <template>
@@ -29,7 +8,9 @@ function onFileChange(event: Event) {
       re<span class="text-brand">Minor</span>
     </nuxtLink>
     <div class="flex gap-7.5 items-center">
-      <nuxtLink to="/" class="text-neutral-400">I'm Feeling Lucky</nuxtLink>
+      <nuxtLink to="/compress" class="text-neutral-400"
+        >I'm Feeling Lucky</nuxtLink
+      >
       <nuxtLink to="/about" class="text-base">About</nuxtLink>
       <button
         @click="openFilePicker"
