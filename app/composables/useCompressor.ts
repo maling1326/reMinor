@@ -6,19 +6,24 @@ export function useCompressor() {
     refresh,
     clear,
     sendToBackend,
+    formatSize,
+    downloadResult,
   } = useUtils(namespace);
-  const { preview, result, currentFile, loadFromStorage } = useImage(namespace);
+  const {
+    preview,
+    result,
+    originalSize,
+    resultSize,
+    currentFile,
+    loadFromStorage,
+  } = useImage(namespace);
 
   // tambah logic khusus compression di sini
   async function compress(quality: number = 80) {
     console.log("Compress berjalan");
     if (!currentFile.value) return;
 
-    // logic sebelum kirim (kalau ada)
-
     await sendToBackend(currentFile.value, `/api/${namespace}`);
-
-    // logic sesudah kirim (kalau ada)
   }
 
   async function handleFile(event: Event) {
@@ -42,5 +47,9 @@ export function useCompressor() {
     currentFile,
     preview,
     result,
+    formatSize,
+    originalSize,
+    resultSize,
+    downloadResult,
   };
 }

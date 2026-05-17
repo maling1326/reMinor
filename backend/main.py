@@ -23,28 +23,35 @@ def encode_image(image, filetype='.jpg'):
     _, buffer = cv.imencode(filetype, image)
     return buffer.tobytes()
 
-def compress_image(img_bgr: np.ndarray, quality=85) -> bytes:
+def compress_to_smaller(img_bgr: np.ndarray, original_bytes: bytes) -> bytes:
     img_rgb = cv.cvtColor(img_bgr, cv.COLOR_BGR2RGB)
     pil_img = Image.fromarray(img_rgb)
-
-    buffer = io.BytesIO()
-    pil_img.save(
-        buffer,
-        format="JPEG",
-        quality=quality,
-        optimize=True,
-        progressive=True
-    )
-    return buffer.getvalue()
+    
+    original_size = len(original_bytes)
+    
+    # coba dari quality rendah ke tinggi
+    # sampai ketemu yang lebih kecil dari aslinya
+    for quality in range(85, 10, -5):
+        buffer = io.BytesIO()
+        pil_img.save(buffer, format="JPEG", quality=quality, optimize=True)
+        result = buffer.getvalue()
+        
+        if len(result) < original_size:
+            return result
+    
+    # kalau semua quality masih lebih besar, return aslinya
+    return original_bytes
 
 @app.post("/compress")
 async def compress(file: UploadFile = File(...)):
     img_bytes = await file.read()
     img       = decode_image(img_bytes)
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     return Response(
-        content    = compress_image(img),
-        media_type = file.content_type
+        # content    = encode_image(img_gray),
+        content    = compress_to_smaller(img, img_bytes),
+        media_type = "image/jpeg"
     )
 
 @app.post("/convert")

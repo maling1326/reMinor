@@ -48,12 +48,12 @@
       <div v-if="preview">
         <p class="font-bold text-4xl">Preview</p>
         <img :src="preview" alt="before" class="max-w-125 max-h-200" />
-        <p>{{ currentFile?.size }} bytes</p>
+        <p>{{ formatSize(originalSize) }}</p>
       </div>
       <div v-if="result">
         <p class="font-bold text-4xl">Result</p>
         <img :src="result" alt="after" class="max-w-125 max-h-200" />
-        <p>{{ currentFile?.size }} bytes</p>
+        <p>{{ formatSize(resultSize) }}</p>
       </div>
     </div>
   </div>
@@ -75,6 +75,9 @@ const {
   currentFile,
   preview,
   result,
+  formatSize,
+  originalSize,
+  resultSize,
 } = useCompressor();
 
 onMounted(async () => {

@@ -1,5 +1,6 @@
 export function useUtils(namespace: string = "default") {
-  const { preview, result, currentFile, loadFromStorage } = useImage(namespace);
+  const { preview, result, currentFile, originalSize, resultSize } =
+    useImage(namespace);
 
   // useUtils.ts
   function readFileAsBase64(file: Blob): Promise<string> {
@@ -17,8 +18,8 @@ export function useUtils(namespace: string = "default") {
     if (!file) return;
 
     currentFile.value = file;
+    originalSize.value = file.size;
 
-    // await dengan benar ✅
     const base64 = await readFileAsBase64(file);
     preview.value = base64;
     localStorage.setItem(`${namespace}_preview`, base64);
@@ -30,7 +31,8 @@ export function useUtils(namespace: string = "default") {
     const response = await fetch(endpoint, { method: "POST", body: formData });
     const blob = await response.blob();
 
-    // sekarang bisa di-await dengan benar ✅
+    resultSize.value = blob.size;
+
     const base64 = await readFileAsBase64(blob as unknown as File);
     result.value = base64;
     localStorage.setItem(`${namespace}_result`, base64);
@@ -71,6 +73,25 @@ export function useUtils(namespace: string = "default") {
     localStorage.removeItem(`${namespace}_result`);
   }
 
+  function formatSize(bytes: number | null): string {
+    if (!bytes) return "0 B";
+
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    if (bytes < 1024 * 1024 * 1000)
+      return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  function downloadResult() {
+    if (!result.value) return;
+
+    const a = document.createElement("a");
+    a.href = result.value; // base64 string langsung bisa dipakai
+    a.download = `compressed_${currentFile.value?.name ?? "image"}`;
+    a.click();
+  }
+
   return {
     handleFile, // <- Fungsi untuk menangani file yang di upload
     refresh, // <- Fungsi untuk mengirim ulang file ke backend
@@ -78,5 +99,7 @@ export function useUtils(namespace: string = "default") {
     sendToBackend, // <- Fungsi untuk mengirim file ke backend
     currentFile, // <- State untuk menyimpan file
     loadFromSession,
+    formatSize,
+    downloadResult,
   };
 }
