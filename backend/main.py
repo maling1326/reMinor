@@ -268,7 +268,9 @@ async def compress_ai(req: CompressAIRequest):
         bpp = (compressed_bytes * 8) / max(h_orig * w_orig, 1)
 
         jpeg_buffer = io.BytesIO()
-        result_img.save(jpeg_buffer, format="JPEG", quality=95, optimize=True)
+        # Gambar ini hanya sekadar "preview" hasil dekompresi agar browser bisa menampilkannya.
+        # Anda bisa menurunkan quality-nya (misal ke 85) agar payload base64 tidak terlalu berat.
+        result_img.save(jpeg_buffer, format="JPEG", quality=85, optimize=True)
         jpeg_bytes = jpeg_buffer.getvalue()
         jpeg_size = len(jpeg_bytes)
         
@@ -278,9 +280,12 @@ async def compress_ai(req: CompressAIRequest):
                 **metrics,
                 "bpp": round(bpp, 4),
                 "original_bytes": original_raw_bytes,
-                "compressed_bytes": jpeg_size,          # ← ukuran file JPEG aktual
-                "bitstream_bytes": compressed_bytes,    # ← bitstream CompressAI (referensi akademis)
-                "compression_ratio": round(original_raw_bytes / max(jpeg_size, 1), 2),
+                # PERBAIKAN: Gunakan compressed_bytes (ukuran bitstream AI) bukan jpeg_size
+                "compressed_bytes": compressed_bytes,
+                # Opsional: Tambahkan informasi ukuran preview jika frontend membutuhkannya
+                "preview_jpeg_bytes": jpeg_size, 
+                # PERBAIKAN: Hitung rasio kompresi menggunakan ukuran bitstream
+                "compression_ratio": round(original_raw_bytes / max(compressed_bytes, 1), 2),
             },
             "model": req.model,
             "model_description": MODEL_REGISTRY[req.model]["description"],
