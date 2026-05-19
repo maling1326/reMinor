@@ -15,6 +15,8 @@ export function useFilePicker() {
         detail: { file },
       }),
     );
+
+    input.value = "";
   }
 
   return { fileInput, openFilePicker, onFileChange };

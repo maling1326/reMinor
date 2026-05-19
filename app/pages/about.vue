@@ -85,17 +85,15 @@ onMounted(async () => {
   console.log(pending);
 
   if (pending) {
-    // ada gambar baru dari index → load dari session
     await loadFromSession();
   } else {
-    // tidak ada gambar baru → load dari localStorage (gambar lama)
     loadFromStorage();
   }
-  // listen kalau ada file baru dari drag and drop
+
   window.addEventListener("dragdrop:newfile", async (e: Event) => {
     const { namespace } = (e as CustomEvent).detail;
     if (namespace !== "compress") return;
-    await loadFromSession(); // load file baru
+    await loadFromSession();
   });
 });
 

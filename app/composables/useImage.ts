@@ -13,9 +13,13 @@ export function useImage(namespace: string = "default") {
   );
 
   function loadFromStorage() {
-    console.log("loadFromStorage Running");
     preview.value = localStorage.getItem(`${namespace}_preview`);
     result.value = localStorage.getItem(`${namespace}_result`);
+
+    const savedOriginal = localStorage.getItem(`${namespace}_originalSize`);
+    const savedResult = localStorage.getItem(`${namespace}_resultSize`);
+    if (savedOriginal) originalSize.value = parseInt(savedOriginal);
+    if (savedResult) resultSize.value = parseInt(savedResult);
   }
 
   return {

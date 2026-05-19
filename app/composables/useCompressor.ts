@@ -35,6 +35,8 @@ export function useCompressor() {
     await baseLoadFromSession();
     await compress();
   }
+  
+  
 
   return {
     baseHandleFile,
