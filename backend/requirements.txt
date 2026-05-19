@@ -1,7 +1,20 @@
-fastapi
-uvicorn
-compressai
-torch
-torchvision
-opencv-python
-python-multipart
+# FastAPI + Deep Learning Image Compression
+# Based on: "Image Compression Based on Deep Learning: A Review"
+# Yasin & Abdulazeez, 2021
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.9
+
+# Deep learning compression (models from the paper)
+compressai==1.2.4
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Image processing
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+
+# Metrics (PSNR, SSIM — as used in Table 1 of paper)
+scikit-image>=0.21.0
