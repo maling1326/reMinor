@@ -107,6 +107,12 @@ def decode_image(base64_str: str) -> Image.Image:
     return Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
 
+def get_original_file_bytes(base64_str: str) -> int:
+    """Ambil ukuran file asli (bytes) dari base64 string yang dikirim client."""
+    raw_b64 = base64_str.split(",", 1)[1] if "," in base64_str else base64_str
+    return len(base64.b64decode(raw_b64))
+
+
 def encode_image(img: Image.Image, fmt: str = "PNG") -> str:
     buffer = io.BytesIO()
     img.save(buffer, format=fmt, optimize=True)
@@ -118,6 +124,25 @@ def compress_to_bytes(img: Image.Image, target_quality: int = 75) -> bytes:
     buffer = io.BytesIO()
     img.save(buffer, format="JPEG", quality=target_quality, optimize=True)
     return buffer.getvalue()
+
+
+def find_best_jpeg(img: Image.Image, original_size: int) -> bytes:
+    """
+    Cari JPEG quality tertinggi yang ukuran output-nya lebih kecil dari original.
+    Resolusi TIDAK diturunkan sama sekali.
+    Urutan quality: 85 → 75 → 65 → 55 → 45 → 35 (fallback terakhir).
+    """
+    for q in [85, 75, 65, 55, 45, 35]:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=q, optimize=True, progressive=True)
+        data = buf.getvalue()
+        if len(data) < original_size:
+            return data
+
+    # Absolute fallback — quality terendah
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=30, optimize=True, progressive=True)
+    return buf.getvalue()
 
 
 def pad_image_tensor(x: torch.Tensor, multiple: int = 64):
@@ -143,10 +168,8 @@ def calculate_metrics(original: np.ndarray, reconstructed: np.ndarray) -> dict:
             data_range=255
         ))
     else:
-        # Manual PSNR fallback
         mse = np.mean((original.astype(float) - reconstructed.astype(float)) ** 2)
         psnr_val = float(20 * np.log10(255.0 / np.sqrt(mse))) if mse > 0 else 100.0
-        # Simplified SSIM fallback
         ssim_val = float(1.0 - (mse / (255.0 ** 2)))
 
     return {
@@ -206,11 +229,11 @@ async def compress_pillow(req: CompressRequest):
         img = decode_image(req.image)
         original_np = np.array(img)
 
+        # Ukuran file asli dari bytes yang dikirim
+        original_size = get_original_file_bytes(req.image)
+
         compressed = compress_to_bytes(img, req.quality)
         compressed_size = len(compressed)
-
-        raw_b64 = req.image.split(",", 1)[1] if "," in req.image else req.image
-        original_size = len(base64.b64decode(raw_b64))
 
         reconstructed = Image.open(io.BytesIO(compressed)).convert("RGB")
         reconstructed_np = np.array(reconstructed)
@@ -237,55 +260,67 @@ async def compress_ai(req: CompressAIRequest):
     """
     Deep learning image compression via CompressAI.
     Models correspond to papers reviewed in Yasin & Abdulazeez (2021).
+
+    Alur:
+      1. Encode gambar → CompressAI bitstream  (ukuran akademis / BPP)
+      2. Decode bitstream → reconstructed image
+      3. Re-encode reconstructed → JPEG sekecil mungkin (< ukuran file asli)
+         tanpa menurunkan resolusi
     """
     try:
         img = decode_image(req.image)
         original_np = np.array(img)
+
+        # ✅ FIX: ukuran file asli dari bytes yang dikirim, bukan raw pixel
+        original_file_bytes = get_original_file_bytes(req.image)
 
         x = transforms.ToTensor()(img).unsqueeze(0).to(DEVICE)
         x_padded, (h_orig, w_orig) = pad_image_tensor(x, multiple=64)
 
         model = get_model(req.model, req.quality)
 
+        # Encode → bitstream
         with torch.no_grad():
             enc_out = model.compress(x_padded)
 
-        compressed_bytes = sum(
+        # Ukuran bitstream CompressAI (untuk metrik akademis / BPP)
+        bitstream_bytes = sum(
             len(s) for strings in enc_out["strings"] for s in strings
         )
 
+        # Decode bitstream → reconstructed tensor
         with torch.no_grad():
             dec_out = model.decompress(enc_out["strings"], enc_out["shape"])
 
         x_hat = dec_out["x_hat"].squeeze(0).clamp(0, 1).cpu()
         result_np = (x_hat.numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
-        result_np = result_np[:h_orig, :w_orig, :]
+        result_np = result_np[:h_orig, :w_orig, :]  # crop padding
         result_img = Image.fromarray(result_np)
 
+        # Hitung PSNR & SSIM antara original vs reconstructed
         metrics = calculate_metrics(original_np, result_np)
 
-        original_raw_bytes = h_orig * w_orig * 3
-        bpp = (compressed_bytes * 8) / max(h_orig * w_orig, 1)
+        # BPP dihitung dari bitstream AI (bukan ukuran JPEG output)
+        bpp = (bitstream_bytes * 8) / max(h_orig * w_orig, 1)
 
-        jpeg_buffer = io.BytesIO()
-        # Gambar ini hanya sekadar "preview" hasil dekompresi agar browser bisa menampilkannya.
-        # Anda bisa menurunkan quality-nya (misal ke 85) agar payload base64 tidak terlalu berat.
-        result_img.save(jpeg_buffer, format="JPEG", quality=85, optimize=True)
-        jpeg_bytes = jpeg_buffer.getvalue()
-        jpeg_size = len(jpeg_bytes)
-        
+        # ✅ FIX: cari JPEG quality terbaik yang ukurannya < file asli
+        # Resolusi TIDAK diturunkan sama sekali
+        output_jpeg_bytes = find_best_jpeg(result_img, original_file_bytes)
+        output_file_bytes = len(output_jpeg_bytes)
+
         return {
-            "result": "data:image/jpeg;base64," + base64.b64encode(jpeg_bytes).decode(),
+            "result": "data:image/jpeg;base64," + base64.b64encode(output_jpeg_bytes).decode(),
             "metrics": {
                 **metrics,
                 "bpp": round(bpp, 4),
-                "original_bytes": original_raw_bytes,
-                # PERBAIKAN: Gunakan compressed_bytes (ukuran bitstream AI) bukan jpeg_size
-                "compressed_bytes": compressed_bytes,
-                # Opsional: Tambahkan informasi ukuran preview jika frontend membutuhkannya
-                "preview_jpeg_bytes": jpeg_size, 
-                # PERBAIKAN: Hitung rasio kompresi menggunakan ukuran bitstream
-                "compression_ratio": round(original_raw_bytes / max(compressed_bytes, 1), 2),
+                # ✅ original_bytes = ukuran file asli yang dikirim (bukan H×W×3)
+                "original_bytes": original_file_bytes,
+                # ✅ compressed_bytes = ukuran file JPEG output yang sesungguhnya
+                "compressed_bytes": output_file_bytes,
+                # bitstream_bytes = referensi akademis / BPP calculation
+                "bitstream_bytes": bitstream_bytes,
+                # ✅ rasio kompresi berbasis ukuran file nyata
+                "compression_ratio": round(original_file_bytes / max(output_file_bytes, 1), 2),
             },
             "model": req.model,
             "model_description": MODEL_REGISTRY[req.model]["description"],
