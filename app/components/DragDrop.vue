@@ -102,9 +102,11 @@ onUnmounted(() => {
     <Transition name="fade">
       <div
         v-if="isDragging"
-        class="fixed inset-0 bg-blue-500/30 border-4 border-dashed border-blue-500 z-50 flex items-center justify-center pointer-events-none"
+        class="fixed inset-0 bg-secondary/30 border-4 border-dashed border-secondary z-50 flex items-center justify-center pointer-events-none"
       >
-        <p class="text-blue-700 text-4xl font-bold">Drop gambar di sini!</p>
+        <p class="text-secondary-dark text-4xl font-bold">
+          Drop gambar di sini!
+        </p>
       </div>
     </Transition>
 

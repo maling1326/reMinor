@@ -10,7 +10,7 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
     @close="showModal = false"
   />
   <MarginDefault>
-    <!-- 
+    <!--
       SECTION 1: Kompres Lossless
     -->
     <section
@@ -21,14 +21,14 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
       >
         <!-- Text Content -->
         <div class="w-full flex flex-col justify-center gap-8" v-appear>
-          <h1 class="font-bold text-5xl lg:text-6xl">
-            Kompres
-            <span class="font-black text-7xl lg:text-8xl text-brand"
+          <h1 class="font-bold text-3xl lg:text-6xl">
+            Kompresi
+            <span class="font-black text-6xl lg:text-8xl text-brand"
               >Lossless</span
             >
           </h1>
 
-          <p class="text-[22px] text-base/65!">
+          <p class="lg:text-[22px] text-base/65!">
             Kompresi ukuran citra tanpa mengubah resolusi atau kejernihan pixel
             menggunakan algoritma yang sudah teruji klinis.
           </p>
@@ -36,7 +36,7 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
           <div>
             <button
               @click="openFilePicker"
-              class="bg-secondary py-3 rounded-base px-6 hover:bg-secondary-dark border hover:border-secondary-dark transition-all text-[20px] font-medium text-primary! shadow-lg shadow-secondary/20"
+              class="bg-secondary py-2 px-3 rounded-base hover:bg-secondary-dark border hover:border-secondary-dark transition-all font-medium text-primary! shadow-lg shadow-secondary/20 lg:py-3 lg:px-6 lg:text-[20px]"
             >
               Upload Gambar
             </button>
@@ -49,7 +49,9 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
               class="hidden"
               @change="onFileChange"
             />
-            <p class="text-base/40! mt-2 font-medium">*.JPG, *PNG, *JPEG</p>
+            <p class="text-base/40! mt-2 font-medium text-xs lg:text-md">
+              *.JPG, *PNG, *JPEG
+            </p>
           </div>
         </div>
 
@@ -98,7 +100,7 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
       </div>
     </section>
 
-    <!-- 
+    <!--
       SECTION 2: Showcase App Window
     -->
     <section
@@ -156,7 +158,7 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
       </div>
     </section>
 
-    <!-- 
+    <!--
       SECTION 3: Feature Grid
     -->
     <section
@@ -166,7 +168,8 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-12 gap-x-8 max-w-7xl w-full"
       >
         <!-- Feature 1: Invert -->
-        <div
+        <NuxtLink
+          to="/invert"
           class="flex flex-col items-center text-center gap-4 group"
           v-appear="0"
         >
@@ -197,10 +200,10 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
             Balikkan skema warna citra untuk menciptakan efek visual klise atau
             memperjelas detail pada objek tertentu
           </p>
-        </div>
-
+        </NuxtLink>
         <!-- Feature 2: Compress -->
-        <div
+        <NuxtLink
+          to="/compress"
           class="flex flex-col items-center text-center gap-4 group"
           v-appear="100"
         >
@@ -226,10 +229,11 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
             Optimalkan ukuran file gambar secara efisien tanpa mengurangi
             kualitas visual asli
           </p>
-        </div>
+        </NuxtLink>
 
         <!-- Feature 3: Resize -->
-        <div
+        <NuxtLink
+          to="/resize"
           class="flex flex-col items-center text-center gap-4 group"
           v-appear="200"
         >
@@ -265,10 +269,11 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
             Sesuaikan dimensi panjang dan lebar foto secara presisi untuk
             berbagai kebutuhan
           </p>
-        </div>
+        </NuxtLink>
 
         <!-- Feature 4: Crop -->
-        <div
+        <NuxtLink
+          to="/crop"
           class="flex flex-col items-center text-center gap-4 group"
           v-appear="300"
         >
@@ -298,10 +303,11 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
           <p class="text-white/50! text-[16px] leading-relaxed max-w-xs">
             Sesuaikan komposisi foto dengan memotong area yang tidak diinginkan
           </p>
-        </div>
+        </NuxtLink>
 
         <!-- Feature 5: Adjust -->
-        <div
+        <NuxtLink
+          to="/adjust"
           class="flex flex-col items-center text-center gap-4 group"
           v-appear="400"
         >
@@ -330,10 +336,11 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
             Sempurnakan kualitas visual dengan mengatur tingkat kecerahan,
             kontras, dan saturasi warna secara instan
           </p>
-        </div>
+        </NuxtLink>
 
         <!-- Feature 6: Convert -->
-        <div
+        <NuxtLink
+          to="/convert"
           class="flex flex-col items-center text-center gap-4 group"
           v-appear="500"
         >
@@ -359,11 +366,11 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
             Ubah format file gambar Anda ke berbagai tipe ekstensi populer
             dengan tetap menjaga integritas data
           </p>
-        </div>
+        </NuxtLink>
       </div>
     </section>
 
-    <!-- 
+    <!--
       SECTION 4: Quote Box
     -->
     <section
@@ -402,7 +409,7 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
       </div>
     </section>
 
-    <!-- 
+    <!--
       SECTION 5: Testimonials
     -->
     <section
@@ -497,7 +504,7 @@ const { fileInput, openFilePicker, onFileChange, showModal, pendingFile } =
       </div>
     </section>
 
-    <!-- 
+    <!--
       SECTION 6: CTA
     -->
     <section

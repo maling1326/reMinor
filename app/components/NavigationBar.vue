@@ -14,7 +14,7 @@ const { fileInput, openFilePicker, onFileChange } = useFilePicker();
       <nuxtLink
         to="/compress"
         class="text-neutral-400 hover:text-white transition-colors"
-        >I'm Feeling Lucky</nuxtLink
+        >Compress</nuxtLink
       >
       <nuxtLink to="/about" class="text-base hover:text-brand transition-colors"
         >About</nuxtLink
@@ -23,7 +23,7 @@ const { fileInput, openFilePicker, onFileChange } = useFilePicker();
         @click="openFilePicker"
         class="bg-tertiary text-primary font-medium p-2 rounded-base px-4 hover:bg-tertiary-dark border hover:border-tertiary-dark transition-all shadow-sm"
       >
-        Tri Rianto Utomo
+        Upload Image
       </button>
 
       <!-- hidden input -->
