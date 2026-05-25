@@ -75,6 +75,13 @@ export function useCompressorAI() {
   const selectedModel = ref<CompressAIModel>("bmshj2018_factorized");
   const quality = ref(3); // 1–8
 
+  // Clamp quality whenever the model changes so the UI never shows a value
+  // the backend silently overrides (cheng2020_anchor tops out at 6, not 8).
+  watch(selectedModel, (model) => {
+    const max = AI_MODELS[model].maxQuality;
+    if (quality.value > max) quality.value = max;
+  });
+
   async function compressWithAI(file?: File) {
     // Pakai file yang dipass, atau ambil dari state currentFile
     const target = file ?? currentFile.value;
@@ -102,9 +109,19 @@ export function useCompressorAI() {
         device: response.device,
       };
     } catch (err: unknown) {
-      const e = err as { data?: { statusMessage?: string }; message?: string };
-      error.value =
-        e?.data?.statusMessage ?? e?.message ?? "Compression failed";
+      const e = err as {
+        data?: { statusMessage?: string };
+        message?: string;
+        statusCode?: number;
+      };
+      // 504 = timeout from our proxy — give a more actionable message
+      if (e?.statusCode === 504) {
+        error.value =
+          "Inference timed out. Try a smaller image or lower quality level.";
+      } else {
+        error.value =
+          e?.data?.statusMessage ?? e?.message ?? "Compression failed";
+      }
     } finally {
       isLoading.value = false;
     }

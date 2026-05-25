@@ -7,13 +7,24 @@ Based on: "Image Compression Based on Deep Learning: A Review"
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import asyncio
 import base64
 import io
+import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from PIL import Image
 import cv2
 import torch
 import torchvision.transforms as transforms
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s — %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)
 
 # scikit-image untuk PSNR & SSIM (Table 1 di paper)
 try:
@@ -77,6 +88,11 @@ MODEL_REGISTRY = {
 
 _model_cache: dict = {}
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Thread pool — heavy models (mbt2018, cheng2020_anchor) block for minutes on CPU.
+# Running them off the event loop prevents FastAPI from freezing and the client
+# from receiving a timeout/502 before inference finishes.
+_executor = ThreadPoolExecutor(max_workers=2)
 
 
 def get_model(model_name: str, quality: int):
@@ -255,93 +271,134 @@ async def compress_pillow(req: CompressRequest):
         raise HTTPException(status_code=500, detail=f"Compress error: {str(e)}")
 
 
+def _run_compressai_sync(
+    img: Image.Image,
+    model_name: str,
+    quality: int,
+    original_file_bytes: int,
+) -> dict:
+    """
+    Pure synchronous inference — runs inside a ThreadPoolExecutor so it never
+    blocks the FastAPI event loop.
+
+    Alur:
+      1. Convert PIL → tensor, pad to multiple-of-64
+      2. model.compress()  → CompressAI bitstream  (akademis / BPP reference)
+      3. model.decompress() → reconstructed tensor
+      4. Crop padding, convert back to PIL
+      5. Hitung PSNR & SSIM vs original
+      6. Re-encode reconstructed → JPEG terkecil yang masih < ukuran file asli
+         (resolusi TIDAK diturunkan)
+    """
+    t_start = time.perf_counter()
+    log.info("[compressai] START model=%s quality=%d device=%s", model_name, quality, DEVICE)
+
+    # ── 1. Prepare tensor ────────────────────────────────────────────────────
+    original_np = np.array(img)
+    x = transforms.ToTensor()(img).unsqueeze(0).to(DEVICE)  # [1, 3, H, W]
+    x_padded, (h_orig, w_orig) = pad_image_tensor(x, multiple=64)
+    log.info("[compressai] Image size: %dx%d (padded to %dx%d)",
+             w_orig, h_orig, x_padded.shape[3], x_padded.shape[2])
+
+    # ── 2. Load model (cached after first call) ───────────────────────────────
+    model = get_model(model_name, quality)
+
+    # ── 3. Encode → bitstream ─────────────────────────────────────────────────
+    t_enc = time.perf_counter()
+    with torch.no_grad():
+        enc_out = model.compress(x_padded)
+    log.info("[compressai] Encode done in %.2fs", time.perf_counter() - t_enc)
+
+    bitstream_bytes = sum(len(s) for strings in enc_out["strings"] for s in strings)
+    log.info("[compressai] Bitstream size: %d bytes", bitstream_bytes)
+
+    # ── 4. Decode bitstream → reconstructed tensor ───────────────────────────
+    t_dec = time.perf_counter()
+    with torch.no_grad():
+        dec_out = model.decompress(enc_out["strings"], enc_out["shape"])
+    log.info("[compressai] Decode done in %.2fs", time.perf_counter() - t_dec)
+
+    # ── 5. Post-process reconstructed image ──────────────────────────────────
+    x_hat = dec_out["x_hat"].squeeze(0).clamp(0, 1).cpu()
+    result_np = (x_hat.numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+    result_np = result_np[:h_orig, :w_orig, :]          # crop padding artefacts
+    result_img = Image.fromarray(result_np)
+
+    # ── 6. Quality metrics (PSNR & SSIM — Table 1 of paper) ─────────────────
+    metrics = calculate_metrics(original_np, result_np)
+    bpp = (bitstream_bytes * 8) / max(h_orig * w_orig, 1)
+    log.info("[compressai] PSNR=%.2f dB  SSIM=%.4f  BPP=%.4f",
+             metrics["psnr"], metrics["ssim"], bpp)
+
+    # ── 7. Re-encode → smallest JPEG < original file size ────────────────────
+    output_jpeg_bytes = find_best_jpeg(result_img, original_file_bytes)
+    output_file_bytes = len(output_jpeg_bytes)
+    compression_ratio = round(original_file_bytes / max(output_file_bytes, 1), 2)
+    log.info("[compressai] Output JPEG: %d bytes  ratio: %.2fx", output_file_bytes, compression_ratio)
+    log.info("[compressai] TOTAL time: %.2fs", time.perf_counter() - t_start)
+
+    return {
+        "result": "data:image/jpeg;base64," + base64.b64encode(output_jpeg_bytes).decode(),
+        "metrics": {
+            **metrics,
+            "bpp": round(bpp, 4),
+            "original_bytes": original_file_bytes,    # ukuran file asli yang dikirim
+            "compressed_bytes": output_file_bytes,    # ukuran JPEG output nyata
+            "bitstream_bytes": bitstream_bytes,       # referensi akademis / BPP
+            "compression_ratio": compression_ratio,
+        },
+        "model": model_name,
+        "model_description": MODEL_REGISTRY[model_name]["description"],
+        "paper_ref": MODEL_REGISTRY[model_name]["paper_ref"],
+        "quality": quality,
+        "device": DEVICE,
+    }
+
+
 @app.post("/compress-ai")
 async def compress_ai(req: CompressAIRequest):
     """
     Deep learning image compression via CompressAI.
     Models correspond to papers reviewed in Yasin & Abdulazeez (2021).
 
-    Alur:
-      1. Encode gambar → CompressAI bitstream  (ukuran akademis / BPP)
-      2. Decode bitstream → reconstructed image
-      3. Re-encode reconstructed → JPEG sekecil mungkin (< ukuran file asli)
-         tanpa menurunkan resolusi
+    Heavy models (mbt2018, cheng2020_anchor) run in a ThreadPoolExecutor so
+    the FastAPI event loop stays free and the client never receives a timeout
+    while waiting for inference to finish.
     """
-    try:
-        img = decode_image(req.image)
-        original_np = np.array(img)
-
-        # ✅ FIX: ukuran file asli dari bytes yang dikirim, bukan raw pixel
-        original_file_bytes = get_original_file_bytes(req.image)
-
-        x = transforms.ToTensor()(img).unsqueeze(0).to(DEVICE)
-        x_padded, (h_orig, w_orig) = pad_image_tensor(x, multiple=64)
-
-        model = get_model(req.model, req.quality)
-
-        # Encode → bitstream
-        with torch.no_grad():
-            enc_out = model.compress(x_padded)
-
-        # Ukuran bitstream CompressAI (untuk metrik akademis / BPP)
-        bitstream_bytes = sum(
-            len(s) for strings in enc_out["strings"] for s in strings
+    if req.model not in MODEL_REGISTRY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown model '{req.model}'. Available: {list(MODEL_REGISTRY.keys())}",
         )
 
-        # Decode bitstream → reconstructed tensor
-        with torch.no_grad():
-            dec_out = model.decompress(enc_out["strings"], enc_out["shape"])
-
-        x_hat = dec_out["x_hat"].squeeze(0).clamp(0, 1).cpu()
-        result_np = (x_hat.numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
-        result_np = result_np[:h_orig, :w_orig, :]  # crop padding
-        result_img = Image.fromarray(result_np)
-
-        # Hitung PSNR & SSIM antara original vs reconstructed
-        metrics = calculate_metrics(original_np, result_np)
-
-        # BPP dihitung dari bitstream AI (bukan ukuran JPEG output)
-        bpp = (bitstream_bytes * 8) / max(h_orig * w_orig, 1)
-
-        # ✅ FIX: cari JPEG quality terbaik yang ukurannya < file asli
-        # Resolusi TIDAK diturunkan sama sekali
-        output_jpeg_bytes = find_best_jpeg(result_img, original_file_bytes)
-        output_file_bytes = len(output_jpeg_bytes)
-
-        return {
-            "result": "data:image/jpeg;base64," + base64.b64encode(output_jpeg_bytes).decode(),
-            "metrics": {
-                **metrics,
-                "bpp": round(bpp, 4),
-                # ✅ original_bytes = ukuran file asli yang dikirim (bukan H×W×3)
-                "original_bytes": original_file_bytes,
-                # ✅ compressed_bytes = ukuran file JPEG output yang sesungguhnya
-                "compressed_bytes": output_file_bytes,
-                # bitstream_bytes = referensi akademis / BPP calculation
-                "bitstream_bytes": bitstream_bytes,
-                # ✅ rasio kompresi berbasis ukuran file nyata
-                "compression_ratio": round(original_file_bytes / max(output_file_bytes, 1), 2),
-            },
-            "model": req.model,
-            "model_description": MODEL_REGISTRY[req.model]["description"],
-            "paper_ref": MODEL_REGISTRY[req.model]["paper_ref"],
-            "quality": req.quality,
-            "device": DEVICE,
-        }
-
-    except torch.cuda.OutOfMemoryError:
-        raise HTTPException(status_code=507, detail="GPU OOM. Try smaller image.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"CompressAI error: {str(e)}")
-
-
-@app.post("/convert")
-async def convert_grayscale(req: ConvertRequest):
-    """Convert to grayscale using OpenCV."""
     try:
+        # Decode image and measure original file size on the event loop —
+        # these are fast I/O ops, no need to offload them.
         img = decode_image(req.image)
-        img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
-        result_img = Image.fromarray(img_cv)
-        return {"result": "data:image/png;base64," + encode_image(result_img, "PNG")}
+        original_file_bytes = get_original_file_bytes(req.image)
+
+        # Offload all blocking PyTorch work to the thread pool.
+        # run_in_executor returns an awaitable; the event loop is free while
+        # the worker thread runs model.compress / model.decompress.
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            _executor,
+            _run_compressai_sync,
+            img,
+            req.model,
+            req.quality,
+            original_file_bytes,
+        )
+        return result
+
+    except HTTPException:
+        raise  # re-raise 400 from model validation above
+    except torch.cuda.OutOfMemoryError:
+        log.error("[compressai] GPU OOM")
+        raise HTTPException(status_code=507, detail="GPU out of memory. Try a smaller image.")
+    except MemoryError:
+        log.error("[compressai] CPU OOM")
+        raise HTTPException(status_code=507, detail="Out of memory. Try a smaller image.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Convert error: {str(e)}")
+        log.exception("[compressai] Unexpected error: %s", e)
+        raise HTTPException(status_code=500, detail=f"CompressAI error: {str(e)}")
